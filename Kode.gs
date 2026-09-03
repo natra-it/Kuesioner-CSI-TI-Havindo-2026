@@ -3,7 +3,7 @@ const SPREADSHEET_ID = '14ZHt1cy02hV4sj6Sjuxq-xvMgdIqWPiB';
 
 // Fungsi untuk menampilkan halaman HTML
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
+  return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('Kuesioner CSI IT - PT. Havindo Pakan Optima')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -131,4 +131,3 @@ function submitKuesioner(formData) {
     return { success: false, message: "Terjadi kesalahan: " + error.toString() };
   }
 }
-Menampilkan Code.gs 3 sept.txt.
