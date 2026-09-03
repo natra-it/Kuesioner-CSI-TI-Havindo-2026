@@ -1,300 +1,134 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kuesioner CSI IT - PT. Havindo Pakan Optima</title>
+// ID Spreadsheet Anda (diambil dari URL yang Anda berikan)
+const SPREADSHEET_ID = '14ZHt1cy02hV4sj6Sjuxq-xvMgdIqWPiB';
+
+// Fungsi untuk menampilkan halaman HTML
+function doGet() {
+  // PERBAIKAN: Mengubah 'Index' menjadi 'index' agar sesuai dengan nama file di sidebar
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('Kuesioner CSI IT - PT. Havindo Pakan Optima')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// Fungsi untuk mengecek apakah divisi sudah mengisi pada quarter tersebut
+function checkExistingData(divisi, quarter) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheetName = "Quarter " + quarter; 
+  const sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) return { exists: false };
+  
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = data.length - 1; i > 0; i--) {
+    if (data[i][1] === divisi) {
+      return { 
+        exists: true, 
+        row: i + 1, 
+        message: "Divisi " + divisi + " sudah mengisi kuesioner untuk Quarter " + quarter + "." 
+      };
+    }
+  }
+  return { exists: false };
+}
+
+// Fungsi untuk menyimpan atau mengupdate data kuesioner dan saran
+function submitKuesioner(formData) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheetName = "Quarter " + formData.quarter;
+    let sheet = ss.getSheetByName(sheetName);
     
-    <!-- Tailwind CSS untuk UI Profesional -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    // Jika sheet belum ada, buatkan otomatis
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      sheet.appendRow([
+        "Timestamp", "Divisi", 
+        "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", 
+        "Total Skor", "Skor CSI %"
+      ]);
+    }
     
-    <!-- SweetAlert2 untuk Notifikasi Pop-up -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    const timestamp = new Date();
+    const totalScore = parseInt(formData.q1) + parseInt(formData.q2) + parseInt(formData.q3) + 
+                       parseInt(formData.q4) + parseInt(formData.q5) + parseInt(formData.q6) + 
+                       parseInt(formData.q7) + parseInt(formData.q8) + parseInt(formData.q9) + 
+                       parseInt(formData.q10) + parseInt(formData.q11);
     
-    <style>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        skyBlue: {
-                            50: '#f0f9ff',
-                            100: '#e0f2fe',
-                            500: '#0ea5e9',
-                            600: '#0284c7',
-                            800: '#075985',
-                        }
-                    }
-                }
-            }
+    const maxScore = 55; // 11 pertanyaan x 5 poin maksimal
+    const csiPercentage = (totalScore / maxScore);
+    
+    const rowData = [
+      timestamp,
+      formData.divisi,
+      formData.q1,
+      formData.q2,
+      formData.q3,
+      formData.q4,
+      formData.q5,
+      formData.q6,
+      formData.q7,
+      formData.q8,
+      formData.q9,
+      formData.q10,
+      formData.q11,
+      totalScore,
+      csiPercentage
+    ];
+
+    let messageOutput = "";
+
+    if (formData.action === 'update' && formData.updateRow) {
+      const range = sheet.getRange(formData.updateRow, 1, 1, rowData.length);
+      range.setValues([rowData]);
+      messageOutput = "Data berhasil diperbarui!";
+    } else {
+      sheet.appendRow(rowData);
+      const lastRow = sheet.getLastRow();
+      sheet.getRange(lastRow, 15).setNumberFormat("0.00%");
+      messageOutput = "Terima kasih! Kuesioner berhasil dikirim.";
+    }
+    
+    // ====================================================
+    // HANDLE TAB "Saran dan kritik"
+    // ====================================================
+    const saranSheetName = "Saran dan kritik";
+    let saranSheet = ss.getSheetByName(saranSheetName);
+    
+    if (!saranSheet) {
+      saranSheet = ss.insertSheet(saranSheetName);
+      saranSheet.appendRow(["Timestamp", "Divisi", "Quarter", "Saran & Kritik", "Keterangan Terakhir"]);
+      saranSheet.getRange("A1:E1").setFontWeight("bold").setBackground("#e0f2fe");
+    }
+    
+    const strTime = Utilities.formatDate(timestamp, ss.getSpreadsheetTimeZone(), "dd/MM/yyyy HH:mm:ss");
+    const isiSaran = (formData.saran && formData.saran.trim() !== "") ? formData.saran : "-";
+    
+    if (formData.action === 'update' && formData.updateRow) {
+      const saranData = saranSheet.getDataRange().getValues();
+      let foundSaranRow = -1;
+      
+      for (let i = saranData.length - 1; i > 0; i--) {
+        if (saranData[i][1] === formData.divisi && String(saranData[i][2]) === String(formData.quarter)) {
+          foundSaranRow = i + 1;
+          break;
         }
-    </style>
-</head>
-<body class="bg-slate-100 text-gray-800 font-sans antialiased p-4 md:p-8 min-h-screen flex items-center justify-center">
+      }
+      
+      if (foundSaranRow !== -1) {
+        saranSheet.getRange(foundSaranRow, 1).setValue(timestamp);
+        saranSheet.getRange(foundSaranRow, 4).setValue(isiSaran);
+        saranSheet.getRange(foundSaranRow, 5).setValue("Diedit pada: " + strTime);
+      } else {
+        saranSheet.appendRow([timestamp, formData.divisi, formData.quarter, isiSaran, "Ditambahkan saat edit: " + strTime]);
+      }
+    } else {
+      saranSheet.appendRow([timestamp, formData.divisi, formData.quarter, isiSaran, "Input Baru"]);
+    }
 
-    <div class="max-w-4xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
-        <!-- Header -->
-        <div class="bg-gradient-to-br from-sky-800 via-sky-600 to-sky-500 p-8 md:p-12 text-white text-center relative">
-            <!-- Elemen Dekoratif Background -->
-            <div class="absolute top-0 left-0 w-40 h-40 bg-white opacity-5 rounded-full -translate-x-16 -translate-y-16"></div>
-            <div class="absolute bottom-0 right-0 w-56 h-56 bg-sky-900 opacity-20 rounded-full translate-x-20 translate-y-20"></div>
-            
-            <div class="relative z-10 flex flex-col items-center">
-                <!-- Wadah Logo -->
-                <div class="bg-white p-3 rounded-2xl shadow-lg mb-5 inline-block transform transition-transform hover:scale-105">
-                    <img src="https://havindopakanoptima.co.id/wp-content/uploads/2026/05/Untitled-design-3.png" 
-                         alt="Logo PT. Havindo Pakan Optima" 
-                         class="h-16 md:h-20 w-auto object-contain"
-                         onerror="this.src='https://placehold.co/300x100/ffffff/0284c7?text=PT.+HAVINDO+PAKAN+OPTIMA'">
-                </div>
-                
-                <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight mb-2 drop-shadow-md">Kuesioner Kepuasan Layanan IT</h1>
-                <h2 class="text-lg md:text-2xl font-bold text-sky-100 mb-4 tracking-wider">PT. HAVINDO PAKAN OPTIMA</h2>
-                
-                <div class="w-16 h-1 bg-sky-300 rounded mx-auto mb-4 opacity-75"></div>
-                
-                <p class="text-sky-50 text-sm md:text-base max-w-2xl mx-auto font-light leading-relaxed">
-                    Bantu kami meningkatkan kualitas layanan IT. Penilaian dan masukan Anda sangat berarti untuk evaluasi dan kemajuan operasional kita bersama.
-                </p>
-            </div>
-        </div>
-
-        <!-- Form Container -->
-        <div class="p-6 md:p-10">
-            <form id="kuesionerForm" onsubmit="handlePreSubmit(event)">
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <!-- Divisi -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Pilih Divisi Anda <span class="text-red-500">*</span></label>
-                        <select id="divisi" name="divisi" required class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors bg-gray-50">
-                            <option value="">-- Pilih Divisi --</option>
-                            <option value="PCH -RM">PCH -RM</option>
-                            <option value="PCH -GR">PCH -GR</option>
-                            <option value="G RM">G RM</option>
-                            <option value="G FG">G FG</option>
-                            <option value="ENG">ENG</option>
-                            <option value="PRD">PRD</option>
-                            <option value="FOR">FOR</option>
-                            <option value="MKT BR">MKT BR</option>
-                            <option value="MKT TM">MKT TM</option>
-                            <option value="DO">DO</option>
-                            <option value="PPIC">PPIC</option>
-                            <option value="DIGI MAR">DIGI MAR</option>
-                            <option value="FIN">FIN</option>
-                            <option value="DCC">DCC</option>
-                            <option value="QC">QC</option>
-                            <option value="LAB">LAB</option>
-                            <option value="LEGAL">LEGAL</option>
-                            <option value="PMX">PMX</option>
-                            <option value="HRGA">HRGA</option>
-                        </select>
-                    </div>
-
-                    <!-- Quarter -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Periode Penilaian (Quarter) <span class="text-red-500">*</span></label>
-                        <select id="quarter" name="quarter" required class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors bg-gray-50">
-                            <option value="">-- Pilih Quarter --</option>
-                            <option value="1">Quarter 1 (Jan - Mar)</option>
-                            <option value="2">Quarter 2 (Apr - Jun)</option>
-                            <option value="3">Quarter 3 (Jul - Sep)</option>
-                            <option value="4">Quarter 4 (Okt - Des)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="bg-sky-50 p-4 rounded-lg border border-sky-100 mb-8 flex items-start gap-3">
-                    <svg class="w-6 h-6 text-sky-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <div>
-                        <p class="text-sm text-sky-900 font-bold mb-1">Petunjuk Penilaian:</p>
-                        <p class="text-sm text-sky-800">Berikan penilaian dari angka 1 hingga 5. Angka <strong>1 (Sangat Kurang / Sangat Tidak Setuju)</strong> dan angka <strong>5 (Sangat Baik / Sangat Setuju)</strong>.</p>
-                    </div>
-                </div>
-
-                <!-- Container Pertanyaan -->
-                <div id="questionsContainer" class="space-y-6">
-                    <!-- Pertanyaan akan digenerate oleh JS -->
-                </div>
-
-                <!-- Input Kritik dan Saran -->
-                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:border-sky-400 hover:shadow-md transition-all mt-8">
-                    <div class="flex items-start gap-3 mb-2">
-                        <svg class="w-6 h-6 text-sky-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
-                        <label class="block text-gray-800 font-bold leading-relaxed">Kritik dan Saran untuk Layanan IT <span class="text-sm text-gray-500 font-normal italic">(Opsional)</span></label>
-                    </div>
-                    <textarea id="saran" name="saran" rows="4" class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-colors bg-gray-50 resize-y" placeholder="Tuliskan kritik, saran, atau masukan Anda terkait layanan IT kedepannya..."></textarea>
-                </div>
-
-                <!-- Hidden inputs untuk handle Update -->
-                <input type="hidden" id="actionType" name="action" value="insert">
-                <input type="hidden" id="updateRow" name="updateRow" value="">
-
-                <!-- Tombol Submit -->
-                <div class="mt-10 pt-6 border-t border-gray-100">
-                    <button type="submit" id="submitBtn" class="w-full md:w-auto md:min-w-[300px] mx-auto bg-sky-600 hover:bg-sky-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all transform hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-sky-300 flex justify-center items-center">
-                        <span id="btnText">Kirim Penilaian</span>
-                        <svg id="loadingIcon" class="hidden animate-spin ml-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        // Data Pertanyaan (Sesuai dengan permintaan)
-        const questions = [
-            { id: 'q1', text: '1. IT merespons permintaan perbaikan atau kendala dengan cepat.' },
-            { id: 'q2', text: '2. Penyelesaian perbaikan perangkat, instalasi, atau kendala jaringan diselesaikan tepat waktu sesuai target SLA.' },
-            { id: 'q3', text: '3. Perbaikan yang diterima akurat dan sesuai dengan kebutuhan penyelesaian masalah.' },
-            { id: 'q4', text: '4. Sistem, aplikasi, dan jaringan yang dikelola oleh IT berjalan stabil dan jarang mengalami gangguan berulang.' },
-            { id: 'q5', text: '5. Proses pengajuan perbaikan, dan permintaan peremajaan barang mudah dilakukan.' },
-            { id: 'q6', text: '6. Personil IT mudah dicari dan diakses saat diperlukan.' },
-            { id: 'q7', text: '7. Informasi terkait penanganan dan status proses disampaikan dengan jelas.' },
-            { id: 'q8', text: '8. IT menjalankan proses penyelesaian sesuai prosedur yang berlaku.' },
-            { id: 'q9', text: '9. IT memberikan pelayanan yang ramah, baik, dan solutif.' },
-            { id: 'q10', text: '10. Keluhan atau masalah terkait kendala user ditangani dengan baik.' },
-            { id: 'q11', text: '11. Secara keseluruhan, saya puas terhadap layanan IT.' }
-        ];
-
-        // Generate HTML untuk pertanyaan
-        const qContainer = document.getElementById('questionsContainer');
-        questions.forEach(q => {
-            let html = `
-                <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:border-sky-400 hover:shadow-md transition-all">
-                    <label class="block text-gray-800 font-semibold mb-4 leading-relaxed">${q.text} <span class="text-red-500">*</span></label>
-                    <div class="flex flex-col sm:flex-row justify-between items-center max-w-lg mx-auto gap-2 sm:gap-0">
-                        <span class="text-xs font-medium text-gray-400 w-full sm:w-16 text-center mb-2 sm:mb-0">Sangat Kurang</span>
-                        
-                        <div class="flex justify-center items-center space-x-3 sm:space-x-4 w-full">
-                            ${[1, 2, 3, 4, 5].map(val => `
-                                <label class="flex flex-col items-center cursor-pointer group">
-                                    <input type="radio" name="${q.id}" value="${val}" required class="peer sr-only">
-                                    <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-gray-300 flex items-center justify-center text-gray-500 peer-checked:bg-sky-500 peer-checked:text-white peer-checked:border-sky-500 peer-checked:shadow-lg group-hover:bg-sky-50 group-hover:border-sky-300 transition-all font-bold text-sm sm:text-base">
-                                        ${val}
-                                    </div>
-                                </label>
-                            `).join('')}
-                        </div>
-
-                        <span class="text-xs font-medium text-gray-400 w-full sm:w-16 text-center mt-2 sm:mt-0">Sangat Baik</span>
-                    </div>
-                </div>
-            `;
-            qContainer.innerHTML += html;
-        });
-
-        // Fallback Simulasi untuk Preview Canvas
-        if (typeof google === 'undefined') {
-            window.google = {
-                script: {
-                    run: {
-                        withSuccessHandler: function(func) { this.successHandler = func; return this; },
-                        withFailureHandler: function(func) { this.failureHandler = func; return this; },
-                        checkExistingData: function(divisi, quarter) {
-                            setTimeout(() => this.successHandler({ exists: false }), 500);
-                        },
-                        submitKuesioner: function(form) {
-                            setTimeout(() => this.successHandler({ success: true, message: "Kuesioner berhasil dikirim!" }), 1000);
-                        }
-                    }
-                }
-            };
-        }
-
-        // Handle Proses sebelum submit (Cek duplikasi)
-        function handlePreSubmit(e) {
-            e.preventDefault();
-            const divisi = document.getElementById('divisi').value;
-            const quarter = document.getElementById('quarter').value;
-            
-            setLoading(true);
-
-            google.script.run
-                .withSuccessHandler(function(response) {
-                    setLoading(false);
-                    if (response.exists) {
-                        Swal.fire({
-                            title: 'Sudah Pernah Mengisi!',
-                            text: response.message + " Apakah Anda ingin mengubah/update kuesioner sebelumnya?",
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonColor: '#0284c7',
-                            cancelButtonColor: '#d33',
-                            confirmButtonText: 'Ya, Ubah Data',
-                            cancelButtonText: 'Batal'
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                document.getElementById('actionType').value = 'update';
-                                document.getElementById('updateRow').value = response.row;
-                                executeSubmit();
-                            }
-                        });
-                    } else {
-                        document.getElementById('actionType').value = 'insert';
-                        executeSubmit();
-                    }
-                })
-                .withFailureHandler(function(error) {
-                    setLoading(false);
-                    showError("Gagal mengecek data.");
-                })
-                .checkExistingData(divisi, quarter);
-        }
-
-        // Eksekusi Submit Data Akhir
-        function executeSubmit() {
-            setLoading(true);
-            const form = document.getElementById('kuesionerForm');
-            
-            google.script.run
-                .withSuccessHandler(function(response) {
-                    setLoading(false);
-                    if (response.success) {
-                        Swal.fire({
-                            title: 'Berhasil!',
-                            text: response.message,
-                            icon: 'success',
-                            confirmButtonColor: '#0284c7'
-                        }).then(() => {
-                            form.reset();
-                            document.getElementById('actionType').value = 'insert';
-                            document.getElementById('updateRow').value = '';
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                        });
-                    } else {
-                        showError(response.message);
-                    }
-                })
-                .withFailureHandler(function(error) {
-                    setLoading(false);
-                    showError("Gagal mengirim data.");
-                })
-                .submitKuesioner(form);
-        }
-
-        function setLoading(isLoading) {
-            const btn = document.getElementById('submitBtn');
-            const icon = document.getElementById('loadingIcon');
-            const text = document.getElementById('btnText');
-            if (isLoading) {
-                btn.disabled = true;
-                btn.classList.add('opacity-80', 'cursor-not-allowed');
-                icon.classList.remove('hidden');
-                text.innerText = 'Memproses Data...';
-            } else {
-                btn.disabled = false;
-                btn.classList.remove('opacity-80', 'cursor-not-allowed');
-                icon.classList.add('hidden');
-                text.innerText = 'Kirim Penilaian';
-            }
-        }
-
-        function showError(msg) {
-            Swal.fire({ title: 'Error!', text: msg, icon: 'error', confirmButtonColor: '#0284c7' });
-        }
-    </script>
-</body>
-</html>
+    return { success: true, message: messageOutput };
+    
+  } catch (error) {
+    return { success: false, message: "Terjadi kesalahan: " + error.toString() };
+  }
+}
