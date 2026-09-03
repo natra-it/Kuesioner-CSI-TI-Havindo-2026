@@ -1,10 +1,12 @@
-// ID Spreadsheet Anda (diambil dari URL)
+// ID Spreadsheet Anda (diambil dari URL yang Anda berikan)
 const SPREADSHEET_ID = '14ZHt1cy02hV4sj6Sjuxq-xvMgdIqWPiB';
 
 // Fungsi untuk menampilkan halaman HTML
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
-      .setTitle('Kuesioner CSI IT - PT. Havindo Pakan Optima');
+    .setTitle('Kuesioner CSI IT - PT. Havindo Pakan Optima')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
 // Fungsi untuk mengecek apakah divisi sudah mengisi pada quarter tersebut
@@ -129,3 +131,4 @@ function submitKuesioner(formData) {
     return { success: false, message: "Terjadi kesalahan: " + error.toString() };
   }
 }
+Menampilkan Code.gs 3 sept.txt.
